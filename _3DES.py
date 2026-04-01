@@ -190,37 +190,32 @@ def triple_des_block(block_bytes, keys_3, mode="encrypt"):
 # =====================================================================
 def main():
     print("======================================================")
-    print(" BÀI TẬP NHÓM @@@: MÃ HÓA VÀ GIẢI MÃ FILE BẰNG 3DES")
+    print(" BÀI TẬP NHÓM 18: MÃ HÓA VÀ GIẢI MÃ CHUỖI VĂN BẢN (3DES)")
     print("======================================================")
 
-    # 1. Nhập thông tin Khóa và File
-    # 3DES cần 24 byte khóa (Tương đương 3 khóa K1, K2, K3 x 8 byte)
+    # 1. Nhập và xử lý Khóa (Key)
     key_in = input("[?] Nhập khóa mã hóa (tối đa 24 ký tự): ")
+    # Đệm null byte nếu khóa ngắn hơn 24, cắt đi nếu dài hơn 24
     key_str = key_in.encode("utf-8").ljust(24, b"\0")[:24]
 
-    # Chia khóa gốc thành 3 khóa con (8 byte mỗi khóa)
     k1, k2, k3 = key_str[0:8], key_str[8:16], key_str[16:24]
-
-    # Sinh subkeys (16 khóa x 48-bit) cho từng khóa K1, K2, K3
     subkeys_3 = [
         des_key_schedule(k1),
         des_key_schedule(k2),
         des_key_schedule(k3)
     ]
 
-    input_file = input("[?] Nhập tên file cần mã hóa (VD: input.txt): ")
+    # 2. Nhập đoạn dữ liệu (Validate >= 15 ký tự)
+    while True:
+        data_in = input("\n[?] Nhập dữ liệu cần mã hóa (Tối thiểu 15 ký tự/số): ")
+        if len(data_in) >= 15:
+            break
+        print(f"[!] Lỗi: Bạn vừa nhập {len(data_in)} ký tự. Vui lòng nhập tối thiểu 15 ký tự!")
 
-    if not os.path.exists(input_file):
-        print(f"[!] Lỗi: Không tìm thấy file '{input_file}' trong thư mục hiện tại.")
-        print("[!] Vui lòng tạo một file .txt và chạy lại chương trình.")
-        return
+    raw_data = data_in.encode("utf-8")
 
-    with open(input_file, "rb") as f:
-        raw_data = f.read()
-    print(f"\n[+] Đã tải file '{input_file}' ({len(raw_data)} bytes).")
-
-    print("[*] Đang tiến hành MÃ HÓA...")
-    # Padding PKCS#7 cho file gốc. Block size của 3DES là 8 byte (không phải 16 như AES)
+    # 3. THỰC HIỆN MÃ HÓA
+    print("\n[*] Đang tiến hành MÃ HÓA...")
     block_size = 8
     pad_len = block_size - (len(raw_data) % block_size)
     data_to_encrypt = raw_data + bytes([pad_len] * pad_len)
@@ -230,39 +225,39 @@ def main():
     for i in range(0, len(data_to_encrypt), block_size):
         block = data_to_encrypt[i: i + block_size]
         encrypted += triple_des_block(block, subkeys_3, mode="encrypt")
-
     end_e = time.perf_counter()
     time_encrypt = end_e - start_e
 
-    enc_filename = "encrypted_3des.bin"
-    with open(enc_filename, "wb") as f:
-        f.write(encrypted)
+    # In kết quả mã hóa dưới dạng Hex để dễ quan sát
+    enc_hex = encrypted.hex().upper()
+    print(f"[+] Bản mã (Hex): {enc_hex}")
 
-    print("[*] Đang tiến hành GIẢI MÃ...")
-
+    # 4. THỰC HIỆN GIẢI MÃ
+    print("\n[*] Đang tiến hành GIẢI MÃ...")
     start_d = time.perf_counter()
     decrypted_raw = bytearray()
     for i in range(0, len(encrypted), block_size):
         block = encrypted[i: i + block_size]
         decrypted_raw += triple_des_block(block, subkeys_3, mode="decrypt")
 
+    # Gỡ Padding
     pad_len_dec = decrypted_raw[-1]
     if 0 < pad_len_dec <= block_size:
         final_data = decrypted_raw[:-pad_len_dec]
     else:
         final_data = decrypted_raw
-
     end_d = time.perf_counter()
     time_decrypt = end_d - start_d
 
-    dec_filename = "decrypted_" + input_file
-    with open(dec_filename, "wb") as f:
-        f.write(final_data)
+    try:
+        dec_text = final_data.decode("utf-8")
+    except Exception:
+        dec_text = "<Lỗi giải mã UTF-8>"
+    print(f"[+] Bản rõ sau giải mã: {dec_text}")
 
+    # 5. TỔNG KẾT BÁO CÁO THỜI GIAN
     print("\n================ TỔNG KẾT KẾT QUẢ ================")
-    print(f"1. File gốc:      {input_file}")
-    print(f"2. File mã hóa:   {enc_filename}")
-    print(f"3. File giải mã:  {dec_filename}")
+    print(f"Dữ liệu gốc ({len(data_in)} ký tự): {data_in}")
     print("-" * 50)
     print(f"[THỜI GIAN MÃ HÓA 3DES]:  {time_encrypt:.6f} giây")
     print(f"[THỜI GIAN GIẢI MÃ 3DES]: {time_decrypt:.6f} giây")
